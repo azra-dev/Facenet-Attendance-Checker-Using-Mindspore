@@ -17,7 +17,7 @@ class Facenet():
                  input='emergency/test', 
                  output='facenet_results',
                  database='emergency/database',
-                 facenet_model_path = 'experiments/pretrained_models/facenet/facenet.ckpt'):
+                 facenet_model_path = 'models/20180402-114759.ckpt'):
         self.input = input
         self.output = output
         self.database = database
