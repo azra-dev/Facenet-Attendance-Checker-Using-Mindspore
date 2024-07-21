@@ -13,9 +13,12 @@ Windows or Ubuntu is compatible with this Service Learning Project.
 - sudo apt install libmpv-dev mpv
 
 # Dependencies 💿
-### **Virtual  Environment**
+### Virtual  Environment
 
 - pip install -r requirements.txt
+
+### Dataset and Weights
+- https://github.com/azra-dev/Facenet-Attendance-Checker-Using-Mindspore/releases/tag/v1.0.0
 
 # Error Handling 🔧
 
