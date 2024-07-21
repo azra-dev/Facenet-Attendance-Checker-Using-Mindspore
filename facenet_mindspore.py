@@ -1,12 +1,14 @@
 import cv2 as cv
 import mindspore as ms
 from mindspore import Tensor, context, load_checkpoint, load_param_into_net, nn
+import mindspore.ops as ops
 import numpy as np
 import os
 import glob
 from basicsr.utils import imwrite
 from mtcnn import MTCNN
 from scipy.spatial.distance import cosine
+from models.InceptionResNetV1 import InceptionResnetV1
 
 # Set the MindSpore context
 context.set_context(mode=context.GRAPH_MODE, device_target="CPU")
@@ -31,11 +33,22 @@ class Facenet():
     
     # FACENET MODEL
     def load_facenet_model(self, model_path):
-        facenet_model = nn.Cell()
+        model = InceptionResnetV1()
         param_dict = load_checkpoint(model_path)
-        load_param_into_net(facenet_model, param_dict)
+        
+        if not param_dict:
+            raise ValueError("The loaded parameter dict is empty. Please check the checkpoint file.")
+        
+        print("Loaded parameter keys:", param_dict.keys())
+        
+        try:
+            load_param_into_net(model, param_dict)
+        except Exception as e:
+            print(f"Error loading parameters into the model: {e}")
+            raise
+        
         print("Facenet model is loaded")
-        return facenet_model
+        return model
 
     # FACE DETECTION MODELS
     def detect_faces_dnn(self, image, net, conf_threshold=0.3):
@@ -92,7 +105,7 @@ class Facenet():
         embeddings_list = []
         for face in faces:
             face_tensor = Tensor(face, ms.float32)
-            face_tensor = ms.expand_dims(face_tensor, 0)  # Add batch dimension
+            face_tensor = ops.expand_dims(face_tensor, 0)  # Add batch dimension
             embedding = facenet_model(face_tensor)
             embeddings_list.append(embedding.asnumpy())
         
