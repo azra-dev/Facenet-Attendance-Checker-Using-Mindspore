@@ -123,7 +123,6 @@ def inception_resnet_v1(inputs, is_training=True, dropout_keep_prob=0.8, bottlen
     
     return net
 
-# Example of using the model
 if __name__ == '__main__':
     inputs = tf.keras.Input(shape=(160, 160, 3))
     net = inception_resnet_v1(inputs)
