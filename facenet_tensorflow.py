@@ -3,7 +3,7 @@ import tensorflow as tf
 import numpy as np
 import os
 import glob
-from basicsr.utils import imwrite
+# from basicsr.utils import imwrite
 from mtcnn import MTCNN
 from scipy.spatial.distance import cosine
 
@@ -13,7 +13,7 @@ class Facenet():
                  input='emergency\\test', 
                  output='facenet_results',
                  database='emergency/database',
-                 facenet_model_path = 'experiments/pretrained_models/facenet/20180402-114759.pb'):
+                 facenet_model_path = 'models'):
         self.input = input
         self.output = output
         self.facenet_model_path = facenet_model_path
@@ -27,14 +27,13 @@ class Facenet():
     
     # FACENET MODEL
     def load_facenet_model(self, model_path):
-        facenet_model = tf.Graph()
-        with facenet_model.as_default():
-            graph_def = tf.compat.v1.GraphDef()
-            with tf.io.gfile.GFile(model_path, 'rb') as f:
-                graph_def.ParseFromString(f.read())
-                tf.import_graph_def(graph_def, name='')
-        print("facenet model is loaded")
-        return facenet_model
+        try:
+            model = tf.saved_model.load(model_path)
+            print("facenet model is loaded")
+        except Exception as e:
+            print(f"Error loading model: {e}")
+            model = None
+        return model
 
     # FACE DETECTION MODEL
     def detect_faces_mtcnn(self, image, conf_threshold=0.9, mode="multiple"):
@@ -68,14 +67,15 @@ class Facenet():
 
     # return list of embeddings
     def generate_embeddings(self, facenet_model, faces):
-        with facenet_model.as_default():
-            with tf.compat.v1.Session(graph=facenet_model) as sess:
-                images_placeholder = facenet_model.get_tensor_by_name("input:0")
-                embeddings = facenet_model.get_tensor_by_name("embeddings:0")
-                phase_train_placeholder = facenet_model.get_tensor_by_name("phase_train:0")
+        if facenet_model is None:
+            print("facenet model is not loaded.")
+            return None
 
-                feed_dict = {images_placeholder: faces, phase_train_placeholder: False}
-                embeddings = sess.run(embeddings, feed_dict=feed_dict)
+        embeddings = []
+        for face in faces:
+            face = np.expand_dims(face, axis=0)
+            embedding = facenet_model(face, training=False).numpy()
+            embeddings.append(embedding)
         
         print("embedding complete.")
         return embeddings
@@ -156,18 +156,18 @@ class Facenet():
                     cv.rectangle(image, (startX, startY), (endX, endY), (0, 255, 0), 4)
                     cv.putText(image, f'{label} - {round(distance*100, 2)}%', (startX, startY - 10), cv.FONT_HERSHEY_SIMPLEX, 1.8, (0, 255, 0), 4)
                 
-                imwrite(image, f'{self.output}/{basename}_recognition{ext}')
+                cv.imwrite(f'{self.output}/{basename}_recognition{ext}', image)
             else:
                 print("no faces found. repeating iteration.")
-                imwrite(image, f'{self.output}/{basename}_recognition{ext}')
+                cv.imwrite(f'{self.output}/{basename}_recognition{ext}', image)
 
 
 # main -------------------------------------------------------------------
 def main():
     FN = Facenet(input='set_input', 
                  output='set_output', 
-                 database='database', 
-                 facenet_model_path="models/20180402-114759.pb")
+                 database='database'
+                )
     FN.run_recognition()
 
 if __name__ == '__main__':
