@@ -22,18 +22,30 @@ class Facenet():
         self.known_embeddings = None
         self.known_labels = None
 
-        self.facenet_model = self.load_facenet_model(facenet_model_path)
+        self.facenet_graph, self.input_tensor, self.output_tensor, self.phase_train_tensor = self.load_facenet_model(facenet_model_path)
+        self.sess = tf.compat.v1.Session(graph=self.facenet_graph)
         os.sep = '/'
     
     # FACENET MODEL
     def load_facenet_model(self, model_path):
         try:
-            model = tf.saved_model.load(model_path)
-            print("facenet model is loaded")
+            facenet_graph = tf.Graph()
+            with facenet_graph.as_default():
+                graph_def = tf.compat.v1.GraphDef()
+                with tf.io.gfile.GFile(model_path, 'rb') as f:
+                    graph_def.ParseFromString(f.read())
+                    tf.import_graph_def(graph_def, name='')
+            print("Facenet model loaded")
+            input_tensor = facenet_graph.get_tensor_by_name('input:0')
+            output_tensor = facenet_graph.get_tensor_by_name('embeddings:0')
+            phase_train_tensor = facenet_graph.get_tensor_by_name('phase_train:0')
         except Exception as e:
             print(f"Error loading model: {e}")
-            model = None
-        return model
+            facenet_graph = None
+            input_tensor = None
+            output_tensor = None
+            phase_train_tensor = None
+        return facenet_graph, input_tensor, output_tensor, phase_train_tensor
 
     # FACE DETECTION MODEL
     def detect_faces_mtcnn(self, image, conf_threshold=0.9, mode="multiple"):
@@ -66,24 +78,26 @@ class Facenet():
         return face
 
     # return list of embeddings
-    def generate_embeddings(self, facenet_model, faces):
-        if facenet_model is None:
-            print("facenet model is not loaded.")
+    def generate_embeddings(self, faces):
+        if self.facenet_graph is None:
+            print("Facenet model is not loaded.")
             return None
 
         embeddings = []
         for face in faces:
             face = np.expand_dims(face, axis=0)
-            embedding = facenet_model(face, training=False).numpy()
+            feed_dict = {self.input_tensor: face, self.phase_train_tensor: False}
+            embedding = self.sess.run(self.output_tensor, feed_dict=feed_dict)
+            embedding = np.squeeze(embedding)  # Squeeze to ensure it's 1-D
             embeddings.append(embedding)
         
-        print("embedding complete.")
+        print("Embedding complete.")
         return embeddings
 
     def cosine_similarity(embedding1, embedding2):
         return 1 - cosine(embedding1, embedding2)  # Similarity score (0 to 1)
 
-    def recognize_faces(self, known_embeddings, known_labels, embeddings, threshold=0.7):
+    def recognize_faces(self, known_embeddings, known_labels, embeddings, threshold=0.4):
         recognized_faces = []
         for embedding in embeddings:
             distances = []
@@ -126,7 +140,7 @@ class Facenet():
 
         known_faces = known_images
         preprocessed_known_faces = [self.preprocess_face(face) for _, _, _, _, face in known_faces]
-        self.known_embeddings = self.generate_embeddings(self.facenet_model, preprocessed_known_faces)
+        self.known_embeddings = self.generate_embeddings(preprocessed_known_faces)
 
     def run_recognition(self):
         self.process_database()
@@ -148,7 +162,7 @@ class Facenet():
 
             if len(faces) > 0:
                 preprocessed_faces = [self.preprocess_face(face) for _, _, _, _, face in faces]
-                embeddings = self.generate_embeddings(self.facenet_model, preprocessed_faces)
+                embeddings = self.generate_embeddings(preprocessed_faces)
 
                 recognized_faces = self.recognize_faces(self.known_embeddings, self.known_labels, embeddings)
 
